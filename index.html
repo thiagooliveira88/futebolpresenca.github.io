@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lista de Futebol</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Lista de Presença - Futebol ⚽</h1>
+
+        <div id="auth-container">
+            <p id="user-info">Por favor, faça login para participar.</p>
+            <button id="login-button">Login com Google</button>
+            <button id="logout-button" style="display:none;">Logout</button>
+        </div>
+
+        <div id="main-content" style="display:none;">
+            <div class="controls">
+                <label for="is-goalkeeper">Sou goleiro?</label>
+                <input type="checkbox" id="is-goalkeeper">
+                <button id="confirm-presence-button">Confirmar Presença</button>
+            </div>
+
+            <div class="list-section">
+                <h2>Confirmados (<span id="confirmed-count">0</span>/<span id="max-players">20</span>) - Goleiros: <span id="goalkeeper-count">0</span>/<span id="max-goalkeepers">2</span></h2>
+                <ul id="confirmed-players-list">
+                    </ul>
+            </div>
+
+            <div class="list-section">
+                <h2>Lista de Espera (<span id="waiting-count">0</span>)</h2>
+                <ul id="waiting-list">
+                    </ul>
+            </div>
+        </div>
+         <p id="error-message" class="error-message"></p>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+
+    <script src="script.js"></script>
+</body>
+</html>
