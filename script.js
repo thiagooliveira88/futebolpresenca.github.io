@@ -18,7 +18,7 @@ const database = firebase.database();
 // --- Constantes de Configuração da Lista ---
 const MAX_FIELD_PLAYERS = 20; // Máximo de jogadores de linha
 const MAX_GOALKEEPERS = 4;    // Máximo de goleiros
-const MAX_TOTAL_PLAYERS = MAX_FIELD_PLAYERS + MAX_GOALKEEPERS; // Total na lista principal (24)
+// MAX_TOTAL_PLAYERS não é mais usado diretamente para exibição principal, mas a lógica interna usa os limites específicos.
 
 // --- Referências do DOM ---
 const loginButton = document.getElementById('login-button');
@@ -27,12 +27,15 @@ const userInfo = document.getElementById('user-info');
 const mainContent = document.getElementById('main-content');
 const confirmPresenceButton = document.getElementById('confirm-presence-button');
 const isGoalkeeperCheckbox = document.getElementById('is-goalkeeper');
-const confirmedPlayersList = document.getElementById('confirmed-players-list');
+
+const confirmedGoalkeepersListElement = document.getElementById('confirmed-goalkeepers-list');
+const confirmedFieldPlayersListElement = document.getElementById('confirmed-fieldplayers-list');
 const waitingListElement = document.getElementById('waiting-list');
-const confirmedCountSpan = document.getElementById('confirmed-count');
-const maxPlayersSpan = document.getElementById('max-players'); // Mostra o total (24)
-const goalkeeperCountSpan = document.getElementById('goalkeeper-count');
-const maxGoalkeepersSpan = document.getElementById('max-goalkeepers'); // Mostra o limite de goleiros (4)
+
+const confirmedGkCountSpan = document.getElementById('confirmed-gk-count');
+const maxGoalkeepersDisplaySpan = document.getElementById('max-goalkeepers-display');
+const confirmedFpCountSpan = document.getElementById('confirmed-fp-count');
+const maxFieldplayersDisplaySpan = document.getElementById('max-fieldplayers-display');
 const waitingCountSpan = document.getElementById('waiting-count');
 const errorMessageElement = document.getElementById('error-message');
 
@@ -77,8 +80,8 @@ const confirmedPlayersRef = database.ref('listaFutebol/jogadoresConfirmados');
 const waitingListRef = database.ref('listaFutebol/listaEspera');
 
 // Atualiza os spans de máximo na UI
-maxPlayersSpan.textContent = MAX_TOTAL_PLAYERS;
-maxGoalkeepersSpan.textContent = MAX_GOALKEEPERS;
+maxGoalkeepersDisplaySpan.textContent = MAX_GOALKEEPERS;
+maxFieldplayersDisplaySpan.textContent = MAX_FIELD_PLAYERS;
 
 function displayErrorMessage(message) {
     errorMessageElement.textContent = message;
@@ -86,6 +89,10 @@ function displayErrorMessage(message) {
         errorMessageElement.textContent = '';
     }, 5000);
 }
+
+// --- Funções de confirmação, remoção e promoção (lógica central sem grandes alterações) ---
+// A lógica de QUEM entra e QUANDO já diferencia goleiros/linha e seus limites.
+// A mudança é em COMO eles são exibidos.
 
 confirmPresenceButton.addEventListener('click', async () => {
     if (!currentUser) {
@@ -103,7 +110,6 @@ confirmPresenceButton.addEventListener('click', async () => {
         const waitingSnapshot = await waitingListRef.once('value');
         const waitingPlayers = waitingSnapshot.val() || {};
 
-        // Verificar se já está em alguma lista
         if (confirmedPlayers[playerId] || waitingPlayers[playerId]) {
             displayErrorMessage("Você já está na lista ou na espera.");
             return;
@@ -122,10 +128,10 @@ confirmPresenceButton.addEventListener('click', async () => {
                 });
                 displayErrorMessage("Presença como goleiro confirmada!");
             } else {
-                displayErrorMessage("Limite de goleiros atingido na lista principal. Você foi adicionado à lista de espera.");
+                displayErrorMessage("Limite de goleiros atingido. Você foi adicionado à lista de espera.");
                 await addToWaitingList(playerId, playerName, true);
             }
-        } else { // Jogador de linha
+        } else {
             if (numConfirmedFieldPlayers < MAX_FIELD_PLAYERS) {
                 await confirmedPlayersRef.child(playerId).set({
                     name: playerName,
@@ -157,35 +163,25 @@ async function addToWaitingList(playerId, playerName, isGoalkeeper) {
     }
 }
 
-async function removePlayer(playerId, listType) {
-    // A lógica de permissão para remover (apenas o próprio jogador) permanece a mesma.
-    // Se precisar de admin, essa lógica seria expandida aqui.
+async function removePlayer(playerId, listType) { // listType é 'confirmed' ou 'waiting'
     if (!currentUser || currentUser.uid !== playerId) {
-        // Esta verificação é simples, se precisar de um admin para remover outros,
-        // a lógica de permissão precisa ser mais elaborada.
-        // Neste ponto, consideramos que apenas o próprio usuário pode se remover.
-        // Se um admin fosse permitido, uma verificação de UID de admin seria necessária.
-        // Por agora, vamos manter a remoção apenas pelo próprio usuário para simplificar.
-        // Idealmente, você verificaria se o currentUser.uid é igual ao playerId
-        // ANTES de permitir a remoção, o que já está implícito na UI
-        // mas é bom ter aqui também caso essa função seja chamada de outro lugar.
-         const playerSnapshot = await (listType === 'confirmed' ? confirmedPlayersRef : waitingListRef).child(playerId).once('value');
-         if (!playerSnapshot.exists()){
+        // Lógica de permissão simplificada: apenas o próprio jogador se remove.
+        // Se esta função pudesse ser chamada por um admin, a verificação seria diferente.
+        const playerRef = listType === 'confirmed' ? confirmedPlayersRef.child(playerId) : waitingListRef.child(playerId);
+        const playerSnapshot = await playerRef.once('value');
+        if (!playerSnapshot.exists()) {
             displayErrorMessage("Jogador não encontrado para remover.");
             return;
-         }
-         // Adicionar uma verificação mais explícita se necessário, por exemplo:
-         // if (currentUser.uid !== playerId && !isCurrentUserAdmin()) {
-         //    displayErrorMessage("Você não tem permissão para remover este jogador.");
-         //    return;
-         // }
+        }
+        // Neste ponto, o botão de remover só aparece para o próprio jogador,
+        // então a verificação currentUser.uid === playerId já foi feita implicitamente pela UI.
     }
 
     try {
         if (listType === 'confirmed') {
             await confirmedPlayersRef.child(playerId).remove();
             displayErrorMessage("Você foi removido da lista principal.");
-            await checkWaitingListAndPromote(); // Verifica se alguém da espera pode subir
+            await checkWaitingListAndPromote();
         } else if (listType === 'waiting') {
             await waitingListRef.child(playerId).remove();
             displayErrorMessage("Você foi removido da lista de espera.");
@@ -208,13 +204,11 @@ async function checkWaitingListAndPromote() {
         const waitingSnapshot = await waitingListRef.orderByChild('timestamp').once('value');
         const waitingPlayersData = waitingSnapshot.val();
 
-        if (!waitingPlayersData) {
-            return; // Lista de espera vazia
-        }
+        if (!waitingPlayersData) return;
 
         const waitingPlayersArray = Object.entries(waitingPlayersData)
             .map(([id, data]) => ({ id, ...data }))
-            .sort((a, b) => a.timestamp - b.timestamp); // Garante a ordem
+            .sort((a, b) => a.timestamp - b.timestamp);
 
         for (const playerToPromote of waitingPlayersArray) {
             let promoted = false;
@@ -222,101 +216,125 @@ async function checkWaitingListAndPromote() {
                 if (numConfirmedGoalkeepers < MAX_GOALKEEPERS) {
                     await confirmedPlayersRef.child(playerToPromote.id).set(playerToPromote);
                     await waitingListRef.child(playerToPromote.id).remove();
-                    console.log(`Goleiro ${playerToPromote.name} promovido da lista de espera.`);
+                    console.log(`Goleiro ${playerToPromote.name} promovido.`);
                     promoted = true;
                 }
-            } else { // Jogador de linha
+            } else {
                 if (numConfirmedFieldPlayers < MAX_FIELD_PLAYERS) {
                     await confirmedPlayersRef.child(playerToPromote.id).set(playerToPromote);
                     await waitingListRef.child(playerToPromote.id).remove();
-                    console.log(`Jogador de linha ${playerToPromote.name} promovido da lista de espera.`);
+                    console.log(`Jogador de linha ${playerToPromote.name} promovido.`);
                     promoted = true;
                 }
             }
             if (promoted) {
-                // Se promoveu alguém, precisamos reavaliar as contagens e tentar promover o próximo se ainda houver vagas
-                // Para simplificar, vamos sair e a próxima atualização de dados ou remoção chamará checkWaitingListAndPromote novamente.
-                // Ou, para uma promoção mais agressiva em uma única chamada:
-                // return checkWaitingListAndPromote(); // Chamada recursiva para preencher mais vagas se possível
-                // Por ora, promover um por vez ao liberar vaga é suficiente e mais simples.
-                break; // Sai do loop após promover o primeiro jogador elegível
+                break; 
             }
         }
-
     } catch (error) {
         console.error("Erro ao promover jogador:", error);
         displayErrorMessage("Erro ao tentar promover jogador da espera.");
     }
 }
 
+// --- Funções de Renderização da UI (GRANDES MUDANÇAS AQUI) ---
 
-// --- Funções de Renderização da UI (a lógica de contagem aqui é apenas para exibição)---
-function renderList(listElement, playersObject, listType) {
-    listElement.innerHTML = '';
-    if (!playersObject) {
-        if (listType === 'confirmed') {
-            confirmedCountSpan.textContent = 0;
-            goalkeeperCountSpan.textContent = 0;
-        } else if (listType === 'waiting') {
-            waitingCountSpan.textContent = 0;
+function renderPlayerListItem(player, index, listTypeIdentifier) {
+    const li = document.createElement('li');
+    
+    const orderSpan = document.createElement('span');
+    orderSpan.classList.add('player-order');
+    orderSpan.textContent = `${index + 1}. `; // Numeração
+    li.appendChild(orderSpan);
+
+    const nameSpan = document.createElement('span');
+    nameSpan.classList.add('player-name');
+    nameSpan.textContent = player.name;
+    li.appendChild(nameSpan);
+
+    if (player.isGoalkeeper) {
+        const gkIndicator = document.createElement('span');
+        gkIndicator.classList.add('player-info');
+        gkIndicator.textContent = ' (Goleiro)';
+        // Só adiciona o indicador se não for a lista específica de goleiros já
+        if (listTypeIdentifier !== 'confirmed-gk' && listTypeIdentifier !== 'waiting-gk-explicit') {
+             li.appendChild(gkIndicator); // Adiciona (Goleiro) na lista de espera geral
         }
+    }
+
+    // Adiciona botão de remover se o usuário logado for o jogador
+    if (currentUser && currentUser.uid === player.id) {
+        const removeBtn = document.createElement('button');
+        removeBtn.classList.add('remove-button');
+        removeBtn.textContent = 'Sair';
+        // Determina de qual lista remover (confirmados ou espera)
+        const listTypeForRemove = listTypeIdentifier.startsWith('confirmed') ? 'confirmed' : 'waiting';
+        removeBtn.onclick = () => removePlayer(player.id, listTypeForRemove);
+        li.appendChild(removeBtn);
+    }
+    return li;
+}
+
+function renderConfirmedLists(confirmedPlayersObject) {
+    confirmedGoalkeepersListElement.innerHTML = '';
+    confirmedFieldPlayersListElement.innerHTML = '';
+
+    if (!confirmedPlayersObject) {
+        confirmedGkCountSpan.textContent = 0;
+        confirmedFpCountSpan.textContent = 0;
         return;
     }
 
-    const playersArray = Object.entries(playersObject).map(([id, data]) => ({ id, ...data }));
+    const allConfirmedArray = Object.entries(confirmedPlayersObject)
+        .map(([id, data]) => ({ id, ...data }))
+        .sort((a, b) => a.timestamp - b.timestamp); // Ordena por ordem de entrada
 
-    if (listType === 'waiting') {
-        playersArray.sort((a, b) => a.timestamp - b.timestamp);
-    } else if (listType === 'confirmed') {
-        playersArray.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-    }
+    const goalkeepers = [];
+    const fieldPlayers = [];
 
-    let currentConfirmedTotal = 0;
-    let currentGoalkeepersInList = 0;
-
-    playersArray.forEach(player => {
-        const li = document.createElement('li');
-        const nameSpan = document.createElement('span');
-        nameSpan.classList.add('player-name');
-        nameSpan.textContent = player.name;
-        li.appendChild(nameSpan);
-
+    allConfirmedArray.forEach(player => {
         if (player.isGoalkeeper) {
-            const gkIndicator = document.createElement('span');
-            gkIndicator.classList.add('player-info');
-            gkIndicator.textContent = ' (Goleiro)';
-            li.appendChild(gkIndicator);
-            if (listType === 'confirmed') {
-                currentGoalkeepersInList++;
-            }
-        }
-
-        if (currentUser && currentUser.uid === player.id) {
-            const removeBtn = document.createElement('button');
-            removeBtn.classList.add('remove-button');
-            removeBtn.textContent = 'Sair';
-            removeBtn.onclick = () => removePlayer(player.id, listType);
-            li.appendChild(removeBtn);
-        }
-        listElement.appendChild(li);
-        if (listType === 'confirmed') {
-            currentConfirmedTotal++;
+            goalkeepers.push(player);
+        } else {
+            fieldPlayers.push(player);
         }
     });
 
-    if (listType === 'confirmed') {
-        confirmedCountSpan.textContent = currentConfirmedTotal; // Total de confirmados (linha + goleiros)
-        goalkeeperCountSpan.textContent = currentGoalkeepersInList; // Total de goleiros confirmados
-    } else if (listType === 'waiting') {
-        waitingCountSpan.textContent = playersArray.length;
-    }
+    goalkeepers.forEach((player, index) => {
+        confirmedGoalkeepersListElement.appendChild(renderPlayerListItem(player, index, 'confirmed-gk'));
+    });
+    confirmedGkCountSpan.textContent = goalkeepers.length;
+
+    fieldPlayers.forEach((player, index) => {
+        confirmedFieldPlayersListElement.appendChild(renderPlayerListItem(player, index, 'confirmed-fp'));
+    });
+    confirmedFpCountSpan.textContent = fieldPlayers.length;
 }
 
-function clearListsUI() {
-    confirmedPlayersList.innerHTML = '';
+function renderWaitingList(waitingPlayersObject) {
     waitingListElement.innerHTML = '';
-    confirmedCountSpan.textContent = '0';
-    goalkeeperCountSpan.textContent = '0';
+    if (!waitingPlayersObject) {
+        waitingCountSpan.textContent = 0;
+        return;
+    }
+
+    const waitingArray = Object.entries(waitingPlayersObject)
+        .map(([id, data]) => ({ id, ...data }))
+        .sort((a, b) => a.timestamp - b.timestamp); // Já ordenado pelo Firebase, mas re-sort para garantir
+
+    waitingArray.forEach((player, index) => {
+        waitingListElement.appendChild(renderPlayerListItem(player, index, 'waiting'));
+    });
+    waitingCountSpan.textContent = waitingArray.length;
+}
+
+
+function clearListsUI() {
+    confirmedGoalkeepersListElement.innerHTML = '';
+    confirmedFieldPlayersListElement.innerHTML = '';
+    waitingListElement.innerHTML = '';
+    confirmedGkCountSpan.textContent = '0';
+    confirmedFpCountSpan.textContent = '0';
     waitingCountSpan.textContent = '0';
 }
 
@@ -325,28 +343,20 @@ function loadLists() {
     if (confirmedPlayersRef) {
         confirmedPlayersRef.on('value', snapshot => {
             const players = snapshot.val();
-            renderList(confirmedPlayersList, players, 'confirmed');
-            // Não é ideal chamar checkWaitingListAndPromote diretamente aqui
-            // pois pode causar loops se a promoção também disparar 'value'.
-            // A promoção já é chamada após uma remoção.
-            // Se um jogador é adicionado diretamente à lista de espera,
-            // a lógica de promoção ao remover alguém da lista principal cobrirá.
-            // Considerar chamar checkWaitingListAndPromote se o número total de jogadores for menor que o máximo,
-            // mas apenas se a lista de espera não estiver vazia.
-            // Por ora, a chamada em removePlayer é o principal gatilho.
+            renderConfirmedLists(players);
+            // A chamada para checkWaitingListAndPromote é crucial após uma remoção,
+            // e também quando a lista de espera é atualizada.
         }, error => {
-            console.error("Erro ao carregar lista de confirmados:", error);
-            displayErrorMessage("Não foi possível carregar a lista de confirmados.");
+            console.error("Erro ao carregar listas de confirmados:", error);
+            displayErrorMessage("Não foi possível carregar as listas de confirmados.");
         });
     }
 
     if (waitingListRef) {
         waitingListRef.on('value', snapshot => {
             const players = snapshot.val();
-            renderList(waitingListElement, players, 'waiting');
-            // Se a lista de espera mudar (alguém entrou ou saiu da espera diretamente),
-            // e houver vagas na lista principal, podemos tentar promover.
-             checkWaitingListAndPromote(); // Tenta promover sempre que a lista de espera mudar e houver vagas.
+            renderWaitingList(players);
+            checkWaitingListAndPromote(); // Tenta promover sempre que a lista de espera ou principal mudar
         }, error => {
             console.error("Erro ao carregar lista de espera:", error);
             displayErrorMessage("Não foi possível carregar a lista de espera.");
@@ -354,7 +364,7 @@ function loadLists() {
     }
 }
 
-// Inicializa a carga das listas se o usuário já estiver logado ao carregar a página
+// Inicializa a carga das listas se o usuário já estiver logado
 if (auth.currentUser) {
     loadLists();
 }
