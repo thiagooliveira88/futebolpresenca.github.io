@@ -16,14 +16,14 @@ const auth = firebase.auth();
 const database = firebase.database();
 
 // --- Constantes de Configuração da Lista ---
-const MAX_FIELD_PLAYERS = 20; // Máximo de jogadores de linha
-const MAX_GOALKEEPERS = 4;    // Máximo de goleiros
+const MAX_FIELD_PLAYERS = 20;
+const MAX_GOALKEEPERS = 4;
 
 // --- Referências do DOM ---
 const loginButton = document.getElementById('login-button');
 const logoutButton = document.getElementById('logout-button');
 const userInfo = document.getElementById('user-info');
-const mainContent = document.getElementById('main-content');
+
 const confirmPresenceButton = document.getElementById('confirm-presence-button');
 const isGoalkeeperCheckbox = document.getElementById('is-goalkeeper');
 
@@ -38,8 +38,13 @@ const maxFieldplayersDisplaySpan = document.getElementById('max-fieldplayers-dis
 const waitingCountSpan = document.getElementById('waiting-count');
 const errorMessageElement = document.getElementById('error-message');
 
-// --- Referências do DOM Adicionais (para Admin) ---
-const adminSectionDiv = document.getElementById('admin-section');
+// Referências para Abas
+const tabsContainer = document.querySelector('.tabs-container');
+const tabButtons = document.querySelectorAll('.tab-button');
+const tabContents = document.querySelectorAll('.tab-content');
+const adminTabButton = document.getElementById('admin-tab-button');
+
+// Referências do Painel Admin (dentro da aba)
 const adminAllUsersListElement = document.getElementById('admin-all-users-list');
 const adminSearchUserInput = document.getElementById('admin-search-user');
 
@@ -55,12 +60,12 @@ auth.onAuthStateChanged(user => {
         userInfo.textContent = `Logado como: ${user.displayName || user.email}`;
         loginButton.style.display = 'none';
         logoutButton.style.display = 'inline-block';
-        mainContent.style.display = 'block';
+        if (tabsContainer) tabsContainer.style.display = 'block'; // Mostra container de abas
 
         // Salvar/Atualizar informações de login do usuário
         const userLoginRef = database.ref(`allUsersLogins/${user.uid}`);
         userLoginRef.set({
-            name: user.displayName || "Usuário Anônimo", // Usar displayName ou um fallback
+            name: user.displayName || "Usuário Anônimo",
             lastLogin: firebase.database.ServerValue.TIMESTAMP
         }).catch(error => {
             console.error("Erro ao salvar informações de login do usuário:", error);
@@ -71,31 +76,44 @@ auth.onAuthStateChanged(user => {
         adminStatusRef.once('value').then(snapshot => {
             isCurrentUserAdmin = snapshot.exists() && snapshot.val() === true;
             console.log("Status de Admin:", isCurrentUserAdmin);
+
+            if (adminTabButton) {
+                adminTabButton.style.display = isCurrentUserAdmin ? 'inline-block' : 'none';
+            }
+
             if (isCurrentUserAdmin) {
-                if (adminSectionDiv) adminSectionDiv.style.display = 'block';
+                // Se for admin, pode carregar a lista de usuários para o painel
                 loadAndRenderAllUsersListForAdmin();
             } else {
-                if (adminSectionDiv) adminSectionDiv.style.display = 'none';
+                // Se não for admin e a aba admin estiver ativa (ex: por URL ou estado anterior),
+                // volta para a primeira aba e limpa dados do painel admin.
+                const adminPanelTabElement = document.getElementById('tab-admin-panel');
+                if (adminPanelTabElement && adminPanelTabElement.classList.contains('active')) {
+                    const gameListsTabButton = document.querySelector('.tab-button[data-tab="tab-game-lists"]');
+                    if (gameListsTabButton) gameListsTabButton.click();
+                }
+                if (adminAllUsersListElement) adminAllUsersListElement.innerHTML = '';
+                allUsersDataForAdminCache = [];
             }
             loadLists(); // Carrega listas principais (Confirmados, Espera)
         }).catch(error => {
             console.error("Erro ao verificar status de admin:", error);
             isCurrentUserAdmin = false;
-            if (adminSectionDiv) adminSectionDiv.style.display = 'none';
+            if (adminTabButton) adminTabButton.style.display = 'none';
             loadLists();
         });
 
     } else { // Usuário deslogado
         isCurrentUserAdmin = false;
-        currentUser = null; // Limpa currentUser explicitamente
+        currentUser = null;
         userInfo.textContent = 'Por favor, faça login para participar.';
         loginButton.style.display = 'inline-block';
         logoutButton.style.display = 'none';
-        mainContent.style.display = 'none';
-        if (adminSectionDiv) adminSectionDiv.style.display = 'none';
+        if (tabsContainer) tabsContainer.style.display = 'none';
+        if (adminTabButton) adminTabButton.style.display = 'none'; // Esconde botão da aba admin
         clearListsUI();
-        if (adminAllUsersListElement) adminAllUsersListElement.innerHTML = ''; // Limpa lista de admin
-        allUsersDataForAdminCache = []; // Limpa cache de admin
+        if (adminAllUsersListElement) adminAllUsersListElement.innerHTML = '';
+        allUsersDataForAdminCache = [];
     }
 });
 
@@ -114,6 +132,31 @@ logoutButton.addEventListener('click', () => {
     });
 });
 
+
+// --- Lógica das Abas ---
+if (tabButtons && tabContents) {
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            // Desativa todos os botões e conteúdos
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            tabContents.forEach(content => content.classList.remove('active'));
+
+            // Ativa o botão clicado e o conteúdo correspondente
+            button.classList.add('active');
+            const targetTabId = button.getAttribute('data-tab');
+            const targetContent = document.getElementById(targetTabId);
+            if (targetContent) {
+                targetContent.classList.add('active');
+            }
+            // Se a aba admin for ativada, e o usuário for admin, recarrega/renderiza sua lista
+            if (targetTabId === 'tab-admin-panel' && isCurrentUserAdmin) {
+                filterAndRenderAdminUserList(adminSearchUserInput ? adminSearchUserInput.value : "");
+            }
+        });
+    });
+}
+
+
 // --- Lógica da Lista de Presença (Firebase Refs) ---
 const confirmedPlayersRef = database.ref('listaFutebol/jogadoresConfirmados');
 const waitingListRef = database.ref('listaFutebol/listaEspera');
@@ -126,7 +169,7 @@ function displayErrorMessage(message) {
     if (errorMessageElement) {
         errorMessageElement.textContent = message;
         setTimeout(() => {
-            errorMessageElement.textContent = '';
+            if (errorMessageElement) errorMessageElement.textContent = '';
         }, 5000);
     }
 }
@@ -156,7 +199,7 @@ confirmPresenceButton.addEventListener('click', async () => {
         const numConfirmedGoalkeepers = confirmedPlayersArray.filter(p => p.isGoalkeeper).length;
         const numConfirmedFieldPlayers = confirmedPlayersArray.filter(p => !p.isGoalkeeper).length;
 
-        const playerData = {
+        const playerData = { // Definir playerData aqui para reutilização
             name: playerName,
             isGoalkeeper: isGoalkeeper,
             timestamp: firebase.database.ServerValue.TIMESTAMP
@@ -187,7 +230,7 @@ confirmPresenceButton.addEventListener('click', async () => {
 
 async function addToWaitingList(playerId, playerName, isGoalkeeper, dataToSet = null) {
     try {
-        const waitingData = dataToSet ? dataToSet : { // Usa dataToSet se fornecido, senão cria novo
+        const waitingData = dataToSet ? dataToSet : {
             name: playerName,
             isGoalkeeper: isGoalkeeper,
             timestamp: firebase.database.ServerValue.TIMESTAMP
@@ -200,11 +243,12 @@ async function addToWaitingList(playerId, playerName, isGoalkeeper, dataToSet = 
 }
 
 async function removePlayer(playerId, listType) {
-    if (!currentUser) { // Adicionado para segurança, embora UI deva prevenir
-        displayErrorMessage("Você precisa estar logado para remover um jogador.");
+    if (!currentUser) {
+        displayErrorMessage("Você precisa estar logado para esta ação.");
         return;
     }
-    // A permissão (ser o próprio jogador ou admin) é verificada pela UI e pelas regras do Firebase
+    // A lógica de quem pode remover (próprio jogador ou admin) é reforçada pelas regras do Firebase
+    // e pela UI que mostra o botão condicionalmente.
     try {
         if (listType === 'confirmed') {
             await confirmedPlayersRef.child(playerId).remove();
@@ -297,7 +341,10 @@ function renderPlayerListItem(player, index, listTypeIdentifier) {
         removeBtn.classList.add('remove-button');
         removeBtn.textContent = (isCurrentUserAdmin && currentUser.uid !== player.id) ? 'Remover' : 'Sair';
         if (isCurrentUserAdmin && currentUser.uid !== player.id) {
-            removeBtn.style.backgroundColor = '#f39c12'; // Cor diferente para admin
+            removeBtn.style.backgroundColor = '#f39c12';
+        } else if (isCurrentUserAdmin && currentUser.uid === player.id){
+            // Para admin se removendo, pode manter o texto "Sair" ou customizar
+            // removeBtn.textContent = 'Sair (Admin)';
         }
         const listTypeForRemove = listTypeIdentifier.startsWith('confirmed') ? 'confirmed' : 'waiting';
         removeBtn.onclick = () => removePlayer(player.id, listTypeForRemove);
@@ -369,7 +416,7 @@ function clearListsUI() {
 }
 
 // --- Funções para o Painel do Admin ---
-function renderAdminUserListItemForPanel(user, isConfirmed, isInWaitingList) { // Nome diferenciado
+function renderAdminUserListItemForPanel(user, isConfirmed, isInWaitingList) {
     const li = document.createElement('li');
     li.classList.add('admin-user-item');
 
@@ -399,7 +446,7 @@ function renderAdminUserListItemForPanel(user, isConfirmed, isInWaitingList) { /
         gkLabel.style.marginRight = '5px';
         gkLabel.style.fontSize = '0.9em';
 
-        const isGoalkeeperCheckboxForAdmin = document.createElement('input'); // Nome de var diferente
+        const isGoalkeeperCheckboxForAdmin = document.createElement('input');
         isGoalkeeperCheckboxForAdmin.type = 'checkbox';
         isGoalkeeperCheckboxForAdmin.id = `admin-add-gk-${user.id}`;
         isGoalkeeperCheckboxForAdmin.classList.add('admin-add-gk-checkbox');
@@ -441,6 +488,10 @@ async function adminAddPlayerToGame(playerId, playerName, isPlayerGoalkeeper) {
 
         if (confirmedData[playerId] || waitingData[playerId]) {
             displayErrorMessage(`${playerName} já está em uma das listas.`);
+            // Mesmo se já estiver, atualiza a lista do admin para refletir o status atual (caso o cache estivesse defasado)
+             if (isCurrentUserAdmin && document.getElementById('tab-admin-panel')?.classList.contains('active')) {
+                filterAndRenderAdminUserList(adminSearchUserInput ? adminSearchUserInput.value : "");
+            }
             return;
         }
 
@@ -471,6 +522,9 @@ async function adminAddPlayerToGame(playerId, playerName, isPlayerGoalkeeper) {
                 displayErrorMessage(`Limite de Jogadores de Linha atingido. ${playerName} adicionado à Espera.`);
             }
         }
+        // A atualização da lista de admin agora é tratada pelos listeners de confirmedPlayersRef/waitingListRef em loadLists
+        // que chamam filterAndRenderAdminUserList se a aba admin estiver ativa.
+
     } catch (error) {
         console.error("Erro do Admin ao adicionar jogador:", error);
         displayErrorMessage("Falha ao adicionar jogador. Verifique o console.");
@@ -478,7 +532,7 @@ async function adminAddPlayerToGame(playerId, playerName, isPlayerGoalkeeper) {
 }
 
 function filterAndRenderAdminUserList(searchTerm = "") {
-    if (!adminAllUsersListElement) return;
+    if (!adminAllUsersListElement || !isCurrentUserAdmin) return;
     adminAllUsersListElement.innerHTML = '';
 
     const lowerSearchTerm = searchTerm.toLowerCase();
@@ -503,8 +557,8 @@ function filterAndRenderAdminUserList(searchTerm = "") {
             adminAllUsersListElement.innerHTML = `<li>Nenhum usuário encontrado ${searchTerm ? 'com o termo "' + searchTerm + '"' : 'ou nenhum login registrado'}.</li>`;
         }
     }).catch(error => {
-        console.error("Erro ao buscar status dos jogadores (confirmados/espera):", error);
-        adminAllUsersListElement.innerHTML = '<li>Erro ao verificar status dos jogadores nas listas.</li>';
+        console.error("Erro ao buscar status dos jogadores (admin panel):", error);
+        adminAllUsersListElement.innerHTML = '<li>Erro ao carregar status dos jogadores.</li>';
     });
 }
 
@@ -521,8 +575,12 @@ function loadAndRenderAllUsersListForAdmin() {
         if (usersData) {
             allUsersDataForAdminCache = Object.entries(usersData)
                 .map(([id, data]) => ({ id, ...data }))
-                .sort((a, b) => b.lastLogin - a.lastLogin); // Mais recentes primeiro
-            filterAndRenderAdminUserList(adminSearchUserInput ? adminSearchUserInput.value : "");
+                .sort((a, b) => b.lastLogin - a.lastLogin);
+            
+            const adminPanelTab = document.getElementById('tab-admin-panel');
+            if(adminPanelTab && adminPanelTab.classList.contains('active')) { // Só renderiza se a aba admin estiver visível
+                filterAndRenderAdminUserList(adminSearchUserInput ? adminSearchUserInput.value : "");
+            }
         } else {
             allUsersDataForAdminCache = [];
             if(adminAllUsersListElement) adminAllUsersListElement.innerHTML = '<li>Nenhum login de usuário registrado ainda.</li>';
@@ -540,6 +598,10 @@ function loadLists() {
         confirmedPlayersRef.on('value', snapshot => {
             const players = snapshot.val();
             renderConfirmedLists(players);
+            const adminPanelTab = document.getElementById('tab-admin-panel');
+            if (isCurrentUserAdmin && adminPanelTab && adminPanelTab.classList.contains('active')) {
+                filterAndRenderAdminUserList(adminSearchUserInput ? adminSearchUserInput.value : "");
+            }
         }, error => {
             console.error("Erro ao carregar lista de confirmados:", error);
             displayErrorMessage("Não foi possível carregar a lista de confirmados.");
@@ -550,7 +612,11 @@ function loadLists() {
         waitingListRef.on('value', snapshot => {
             const players = snapshot.val();
             renderWaitingList(players);
-            checkWaitingListAndPromote(); // Tenta promover sempre que lista de espera ou principal mudar
+            checkWaitingListAndPromote();
+            const adminPanelTab = document.getElementById('tab-admin-panel');
+            if (isCurrentUserAdmin && adminPanelTab && adminPanelTab.classList.contains('active')) {
+                filterAndRenderAdminUserList(adminSearchUserInput ? adminSearchUserInput.value : "");
+            }
         }, error => {
             console.error("Erro ao carregar lista de espera:", error);
             displayErrorMessage("Não foi possível carregar a lista de espera.");
@@ -558,7 +624,7 @@ function loadLists() {
     }
 }
 
-// Adiciona listener para o campo de busca de admin (se existir)
+// Adiciona listener para o campo de busca de admin
 if (adminSearchUserInput) {
     adminSearchUserInput.addEventListener('input', (e) => {
         if (isCurrentUserAdmin) {
@@ -566,8 +632,3 @@ if (adminSearchUserInput) {
         }
     });
 }
-
-// Inicializa a carga das listas se o usuário já estiver logado (movido para dentro do onAuthStateChanged)
-// if (auth.currentUser) {
-//    // A lógica de inicialização agora está dentro de onAuthStateChanged
-// }
