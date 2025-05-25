@@ -241,36 +241,42 @@ async function checkWaitingListAndPromote() {
 
 function renderPlayerListItem(player, index, listTypeIdentifier) {
     const li = document.createElement('li');
-    
+
+    // Criar um contêiner para as informações textuais do jogador
+    const playerTextInfo = document.createElement('div');
+    playerTextInfo.classList.add('player-text-info');
+
     const orderSpan = document.createElement('span');
     orderSpan.classList.add('player-order');
     orderSpan.textContent = `${index + 1}. `; // Numeração
-    li.appendChild(orderSpan);
+    playerTextInfo.appendChild(orderSpan);
 
     const nameSpan = document.createElement('span');
     nameSpan.classList.add('player-name');
     nameSpan.textContent = player.name;
-    li.appendChild(nameSpan);
+    playerTextInfo.appendChild(nameSpan);
 
     if (player.isGoalkeeper) {
         const gkIndicator = document.createElement('span');
-        gkIndicator.classList.add('player-info');
+        gkIndicator.classList.add('player-info'); // Classe existente para indicação (Goleiro)
         gkIndicator.textContent = ' (Goleiro)';
-        // Só adiciona o indicador se não for a lista específica de goleiros já
-        if (listTypeIdentifier !== 'confirmed-gk' && listTypeIdentifier !== 'waiting-gk-explicit') {
-             li.appendChild(gkIndicator); // Adiciona (Goleiro) na lista de espera geral
+        // Adiciona o indicador (Goleiro) apenas se não for a lista específica de goleiros
+        // e na lista de espera.
+        if (listTypeIdentifier === 'confirmed-fp' || listTypeIdentifier === 'waiting') {
+             playerTextInfo.appendChild(gkIndicator);
         }
     }
+
+    li.appendChild(playerTextInfo); // Adiciona o grupo de texto ao <li>
 
     // Adiciona botão de remover se o usuário logado for o jogador
     if (currentUser && currentUser.uid === player.id) {
         const removeBtn = document.createElement('button');
         removeBtn.classList.add('remove-button');
         removeBtn.textContent = 'Sair';
-        // Determina de qual lista remover (confirmados ou espera)
         const listTypeForRemove = listTypeIdentifier.startsWith('confirmed') ? 'confirmed' : 'waiting';
         removeBtn.onclick = () => removePlayer(player.id, listTypeForRemove);
-        li.appendChild(removeBtn);
+        li.appendChild(removeBtn); // Adiciona o botão diretamente ao <li>, após o grupo de texto
     }
     return li;
 }
