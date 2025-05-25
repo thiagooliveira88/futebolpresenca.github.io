@@ -9,9 +9,7 @@ const firebaseConfig = {
     appId: "1:410645587358:web:5777a493ef77112f16228f",
     measurementId: "G-LJBYMWJM9C"
   };
-
-  let isCurrentUserAdmin = false;
-
+  
 // Inicializar Firebase
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
@@ -20,7 +18,6 @@ const database = firebase.database();
 // --- Constantes de Configuração da Lista ---
 const MAX_FIELD_PLAYERS = 20; // Máximo de jogadores de linha
 const MAX_GOALKEEPERS = 4;    // Máximo de goleiros
-// MAX_TOTAL_PLAYERS não é mais usado diretamente para exibição principal, mas a lógica interna usa os limites específicos.
 
 // --- Referências do DOM ---
 const loginButton = document.getElementById('login-button');
@@ -41,9 +38,17 @@ const maxFieldplayersDisplaySpan = document.getElementById('max-fieldplayers-dis
 const waitingCountSpan = document.getElementById('waiting-count');
 const errorMessageElement = document.getElementById('error-message');
 
-// --- Estado do Usuário ---
-let currentUser = null;
+// --- Referências do DOM Adicionais (para Admin) ---
+const adminSectionDiv = document.getElementById('admin-section');
+const adminAllUsersListElement = document.getElementById('admin-all-users-list');
+const adminSearchUserInput = document.getElementById('admin-search-user');
 
+// --- Estado do Usuário e Admin ---
+let currentUser = null;
+let isCurrentUserAdmin = false;
+let allUsersDataForAdminCache = []; // Cache para busca/filtragem no cliente
+
+// --- Lógica de Autenticação ---
 auth.onAuthStateChanged(user => {
     currentUser = user;
     if (user) {
@@ -52,30 +57,45 @@ auth.onAuthStateChanged(user => {
         logoutButton.style.display = 'inline-block';
         mainContent.style.display = 'block';
 
+        // Salvar/Atualizar informações de login do usuário
+        const userLoginRef = database.ref(`allUsersLogins/${user.uid}`);
+        userLoginRef.set({
+            name: user.displayName || "Usuário Anônimo", // Usar displayName ou um fallback
+            lastLogin: firebase.database.ServerValue.TIMESTAMP
+        }).catch(error => {
+            console.error("Erro ao salvar informações de login do usuário:", error);
+        });
+
         // Verificar status de admin
         const adminStatusRef = database.ref(`admins/${user.uid}`);
         adminStatusRef.once('value').then(snapshot => {
             isCurrentUserAdmin = snapshot.exists() && snapshot.val() === true;
             console.log("Status de Admin:", isCurrentUserAdmin);
-            // Se as listas já estiverem carregadas, pode ser necessário forçar uma re-renderização
-            // para que os botões de remover apareçam/desapareçam corretamente.
-            // Por simplicidade, a renderização já ocorre com base nos dados do Firebase,
-            // e a lógica do botão de remoção agora usará isCurrentUserAdmin.
-            // Vamos garantir que as funções de renderização sejam chamadas para atualizar a UI.
-            loadLists(); // Chamar loadLists para garantir que a UI reflete o status de admin
+            if (isCurrentUserAdmin) {
+                if (adminSectionDiv) adminSectionDiv.style.display = 'block';
+                loadAndRenderAllUsersListForAdmin();
+            } else {
+                if (adminSectionDiv) adminSectionDiv.style.display = 'none';
+            }
+            loadLists(); // Carrega listas principais (Confirmados, Espera)
         }).catch(error => {
             console.error("Erro ao verificar status de admin:", error);
-            isCurrentUserAdmin = false; // Garante que não é admin em caso de erro
+            isCurrentUserAdmin = false;
+            if (adminSectionDiv) adminSectionDiv.style.display = 'none';
             loadLists();
         });
 
-    } else {
-        isCurrentUserAdmin = false; // Reseta o status de admin no logout
+    } else { // Usuário deslogado
+        isCurrentUserAdmin = false;
+        currentUser = null; // Limpa currentUser explicitamente
         userInfo.textContent = 'Por favor, faça login para participar.';
         loginButton.style.display = 'inline-block';
         logoutButton.style.display = 'none';
         mainContent.style.display = 'none';
+        if (adminSectionDiv) adminSectionDiv.style.display = 'none';
         clearListsUI();
+        if (adminAllUsersListElement) adminAllUsersListElement.innerHTML = ''; // Limpa lista de admin
+        allUsersDataForAdminCache = []; // Limpa cache de admin
     }
 });
 
@@ -94,24 +114,22 @@ logoutButton.addEventListener('click', () => {
     });
 });
 
-// --- Lógica da Lista de Presença ---
+// --- Lógica da Lista de Presença (Firebase Refs) ---
 const confirmedPlayersRef = database.ref('listaFutebol/jogadoresConfirmados');
 const waitingListRef = database.ref('listaFutebol/listaEspera');
 
 // Atualiza os spans de máximo na UI
-maxGoalkeepersDisplaySpan.textContent = MAX_GOALKEEPERS;
-maxFieldplayersDisplaySpan.textContent = MAX_FIELD_PLAYERS;
+if (maxGoalkeepersDisplaySpan) maxGoalkeepersDisplaySpan.textContent = MAX_GOALKEEPERS;
+if (maxFieldplayersDisplaySpan) maxFieldplayersDisplaySpan.textContent = MAX_FIELD_PLAYERS;
 
 function displayErrorMessage(message) {
-    errorMessageElement.textContent = message;
-    setTimeout(() => {
-        errorMessageElement.textContent = '';
-    }, 5000);
+    if (errorMessageElement) {
+        errorMessageElement.textContent = message;
+        setTimeout(() => {
+            errorMessageElement.textContent = '';
+        }, 5000);
+    }
 }
-
-// --- Funções de confirmação, remoção e promoção (lógica central sem grandes alterações) ---
-// A lógica de QUEM entra e QUANDO já diferencia goleiros/linha e seus limites.
-// A mudança é em COMO eles são exibidos.
 
 confirmPresenceButton.addEventListener('click', async () => {
     if (!currentUser) {
@@ -138,29 +156,27 @@ confirmPresenceButton.addEventListener('click', async () => {
         const numConfirmedGoalkeepers = confirmedPlayersArray.filter(p => p.isGoalkeeper).length;
         const numConfirmedFieldPlayers = confirmedPlayersArray.filter(p => !p.isGoalkeeper).length;
 
+        const playerData = {
+            name: playerName,
+            isGoalkeeper: isGoalkeeper,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        };
+
         if (isGoalkeeper) {
             if (numConfirmedGoalkeepers < MAX_GOALKEEPERS) {
-                await confirmedPlayersRef.child(playerId).set({
-                    name: playerName,
-                    isGoalkeeper: true,
-                    timestamp: firebase.database.ServerValue.TIMESTAMP
-                });
+                await confirmedPlayersRef.child(playerId).set(playerData);
                 displayErrorMessage("Presença como goleiro confirmada!");
             } else {
-                displayErrorMessage("Limite de goleiros atingido. Você foi adicionado à lista de espera.");
-                await addToWaitingList(playerId, playerName, true);
+                await addToWaitingList(playerId, playerName, true, playerData); // Passa playerData
+                displayErrorMessage("Limite de goleiros atingido. Adicionado à lista de espera.");
             }
-        } else {
+        } else { // Jogador de linha
             if (numConfirmedFieldPlayers < MAX_FIELD_PLAYERS) {
-                await confirmedPlayersRef.child(playerId).set({
-                    name: playerName,
-                    isGoalkeeper: false,
-                    timestamp: firebase.database.ServerValue.TIMESTAMP
-                });
+                await confirmedPlayersRef.child(playerId).set(playerData);
                 displayErrorMessage("Presença como jogador de linha confirmada!");
             } else {
-                displayErrorMessage("Limite de jogadores de linha atingido. Você foi adicionado à lista de espera.");
-                await addToWaitingList(playerId, playerName, false);
+                await addToWaitingList(playerId, playerName, false, playerData); // Passa playerData
+                displayErrorMessage("Limite de jogadores de linha atingido. Adicionado à lista de espera.");
             }
         }
     } catch (error) {
@@ -169,41 +185,34 @@ confirmPresenceButton.addEventListener('click', async () => {
     }
 });
 
-async function addToWaitingList(playerId, playerName, isGoalkeeper) {
+async function addToWaitingList(playerId, playerName, isGoalkeeper, dataToSet = null) {
     try {
-        await waitingListRef.child(playerId).set({
+        const waitingData = dataToSet ? dataToSet : { // Usa dataToSet se fornecido, senão cria novo
             name: playerName,
             isGoalkeeper: isGoalkeeper,
             timestamp: firebase.database.ServerValue.TIMESTAMP
-        });
+        };
+        await waitingListRef.child(playerId).set(waitingData);
     } catch (error) {
         console.error("Erro ao adicionar à lista de espera:", error);
         displayErrorMessage("Erro ao entrar na lista de espera.");
     }
 }
 
-async function removePlayer(playerId, listType) { // listType é 'confirmed' ou 'waiting'
-    if (!currentUser || currentUser.uid !== playerId) {
-        // Lógica de permissão simplificada: apenas o próprio jogador se remove.
-        // Se esta função pudesse ser chamada por um admin, a verificação seria diferente.
-        const playerRef = listType === 'confirmed' ? confirmedPlayersRef.child(playerId) : waitingListRef.child(playerId);
-        const playerSnapshot = await playerRef.once('value');
-        if (!playerSnapshot.exists()) {
-            displayErrorMessage("Jogador não encontrado para remover.");
-            return;
-        }
-        // Neste ponto, o botão de remover só aparece para o próprio jogador,
-        // então a verificação currentUser.uid === playerId já foi feita implicitamente pela UI.
+async function removePlayer(playerId, listType) {
+    if (!currentUser) { // Adicionado para segurança, embora UI deva prevenir
+        displayErrorMessage("Você precisa estar logado para remover um jogador.");
+        return;
     }
-
+    // A permissão (ser o próprio jogador ou admin) é verificada pela UI e pelas regras do Firebase
     try {
         if (listType === 'confirmed') {
             await confirmedPlayersRef.child(playerId).remove();
-            displayErrorMessage("Você foi removido da lista principal.");
+            displayErrorMessage("Jogador removido da lista principal.");
             await checkWaitingListAndPromote();
         } else if (listType === 'waiting') {
             await waitingListRef.child(playerId).remove();
-            displayErrorMessage("Você foi removido da lista de espera.");
+            displayErrorMessage("Jogador removido da lista de espera.");
         }
     } catch (error) {
         console.error(`Erro ao remover jogador da lista ${listType}:`, error);
@@ -256,86 +265,7 @@ async function checkWaitingListAndPromote() {
     }
 }
 
-// --- Funções de Renderização da UI (GRANDES MUDANÇAS AQUI) ---
-
-// function renderPlayerListItem(player, index, listTypeIdentifier) {
-//     const li = document.createElement('li');
-    
-//     const orderSpan = document.createElement('span');
-//     orderSpan.classList.add('player-order');
-//     orderSpan.textContent = `${index + 1}. `; // Numeração
-//     li.appendChild(orderSpan);
-
-//     const nameSpan = document.createElement('span');
-//     nameSpan.classList.add('player-name');
-//     nameSpan.textContent = player.name;
-//     li.appendChild(nameSpan);
-
-//     if (player.isGoalkeeper) {
-//         const gkIndicator = document.createElement('span');
-//         gkIndicator.classList.add('player-info');
-//         gkIndicator.textContent = ' (Goleiro)';
-//         // Só adiciona o indicador se não for a lista específica de goleiros já
-//         if (listTypeIdentifier !== 'confirmed-gk' && listTypeIdentifier !== 'waiting-gk-explicit') {
-//              li.appendChild(gkIndicator); // Adiciona (Goleiro) na lista de espera geral
-//         }
-//     }
-
-//     // Adiciona botão de remover se o usuário logado for o jogador
-//     if (currentUser && currentUser.uid === player.id) {
-//         const removeBtn = document.createElement('button');
-//         removeBtn.classList.add('remove-button');
-//         removeBtn.textContent = 'Sair';
-//         // Determina de qual lista remover (confirmados ou espera)
-//         const listTypeForRemove = listTypeIdentifier.startsWith('confirmed') ? 'confirmed' : 'waiting';
-//         removeBtn.onclick = () => removePlayer(player.id, listTypeForRemove);
-//         li.appendChild(removeBtn);
-//     }
-//     return li;
-// }
-
-// function renderPlayerListItem(player, index, listTypeIdentifier) {
-//     const li = document.createElement('li');
-
-//     // Criar um contêiner para as informações textuais do jogador
-//     const playerTextInfo = document.createElement('div');
-//     playerTextInfo.classList.add('player-text-info');
-
-//     const orderSpan = document.createElement('span');
-//     orderSpan.classList.add('player-order');
-//     orderSpan.textContent = `${index + 1}. `; // Numeração
-//     playerTextInfo.appendChild(orderSpan);
-
-//     const nameSpan = document.createElement('span');
-//     nameSpan.classList.add('player-name');
-//     nameSpan.textContent = player.name;
-//     playerTextInfo.appendChild(nameSpan);
-
-//     if (player.isGoalkeeper) {
-//         const gkIndicator = document.createElement('span');
-//         gkIndicator.classList.add('player-info'); // Classe existente para indicação (Goleiro)
-//         gkIndicator.textContent = ' (Goleiro)';
-//         // Adiciona o indicador (Goleiro) apenas se não for a lista específica de goleiros
-//         // e na lista de espera.
-//         if (listTypeIdentifier === 'confirmed-fp' || listTypeIdentifier === 'waiting') {
-//              playerTextInfo.appendChild(gkIndicator);
-//         }
-//     }
-
-//     li.appendChild(playerTextInfo); // Adiciona o grupo de texto ao <li>
-
-//     // Adiciona botão de remover se o usuário logado for o jogador
-//     if (currentUser && currentUser.uid === player.id) {
-//         const removeBtn = document.createElement('button');
-//         removeBtn.classList.add('remove-button');
-//         removeBtn.textContent = 'Sair';
-//         const listTypeForRemove = listTypeIdentifier.startsWith('confirmed') ? 'confirmed' : 'waiting';
-//         removeBtn.onclick = () => removePlayer(player.id, listTypeForRemove);
-//         li.appendChild(removeBtn); // Adiciona o botão diretamente ao <li>, após o grupo de texto
-//     }
-//     return li;
-// }
-
+// --- Funções de Renderização da UI (Listas de Jogo) ---
 function renderPlayerListItem(player, index, listTypeIdentifier) {
     const li = document.createElement('li');
 
@@ -362,21 +292,13 @@ function renderPlayerListItem(player, index, listTypeIdentifier) {
     }
     li.appendChild(playerTextInfo);
 
-    // Adiciona botão de remover SE:
-    // 1. O usuário logado é o próprio jogador OU
-    // 2. O usuário logado é um administrador
     if (currentUser && (currentUser.uid === player.id || isCurrentUserAdmin)) {
         const removeBtn = document.createElement('button');
         removeBtn.classList.add('remove-button');
-        removeBtn.textContent = 'Sair'; // Para o próprio usuário
+        removeBtn.textContent = (isCurrentUserAdmin && currentUser.uid !== player.id) ? 'Remover' : 'Sair';
         if (isCurrentUserAdmin && currentUser.uid !== player.id) {
-            removeBtn.textContent = 'Remover'; // Para admin removendo outro
-            removeBtn.style.backgroundColor = '#f39c12'; // Cor diferente para admin remover
-        } else if (isCurrentUserAdmin && currentUser.uid === player.id) {
-             removeBtn.textContent = 'Sair (Admin)'; // Admin saindo da própria vaga
+            removeBtn.style.backgroundColor = '#f39c12'; // Cor diferente para admin
         }
-
-
         const listTypeForRemove = listTypeIdentifier.startsWith('confirmed') ? 'confirmed' : 'waiting';
         removeBtn.onclick = () => removePlayer(player.id, listTypeForRemove);
         li.appendChild(removeBtn);
@@ -385,18 +307,18 @@ function renderPlayerListItem(player, index, listTypeIdentifier) {
 }
 
 function renderConfirmedLists(confirmedPlayersObject) {
-    confirmedGoalkeepersListElement.innerHTML = '';
-    confirmedFieldPlayersListElement.innerHTML = '';
+    if(confirmedGoalkeepersListElement) confirmedGoalkeepersListElement.innerHTML = '';
+    if(confirmedFieldPlayersListElement) confirmedFieldPlayersListElement.innerHTML = '';
 
     if (!confirmedPlayersObject) {
-        confirmedGkCountSpan.textContent = 0;
-        confirmedFpCountSpan.textContent = 0;
+        if(confirmedGkCountSpan) confirmedGkCountSpan.textContent = 0;
+        if(confirmedFpCountSpan) confirmedFpCountSpan.textContent = 0;
         return;
     }
 
     const allConfirmedArray = Object.entries(confirmedPlayersObject)
         .map(([id, data]) => ({ id, ...data }))
-        .sort((a, b) => a.timestamp - b.timestamp); // Ordena por ordem de entrada
+        .sort((a, b) => a.timestamp - b.timestamp);
 
     const goalkeepers = [];
     const fieldPlayers = [];
@@ -410,54 +332,217 @@ function renderConfirmedLists(confirmedPlayersObject) {
     });
 
     goalkeepers.forEach((player, index) => {
-        confirmedGoalkeepersListElement.appendChild(renderPlayerListItem(player, index, 'confirmed-gk'));
+        if(confirmedGoalkeepersListElement) confirmedGoalkeepersListElement.appendChild(renderPlayerListItem(player, index, 'confirmed-gk'));
     });
-    confirmedGkCountSpan.textContent = goalkeepers.length;
+    if(confirmedGkCountSpan) confirmedGkCountSpan.textContent = goalkeepers.length;
 
     fieldPlayers.forEach((player, index) => {
-        confirmedFieldPlayersListElement.appendChild(renderPlayerListItem(player, index, 'confirmed-fp'));
+        if(confirmedFieldPlayersListElement) confirmedFieldPlayersListElement.appendChild(renderPlayerListItem(player, index, 'confirmed-fp'));
     });
-    confirmedFpCountSpan.textContent = fieldPlayers.length;
+    if(confirmedFpCountSpan) confirmedFpCountSpan.textContent = fieldPlayers.length;
 }
 
 function renderWaitingList(waitingPlayersObject) {
-    waitingListElement.innerHTML = '';
+    if(waitingListElement) waitingListElement.innerHTML = '';
     if (!waitingPlayersObject) {
-        waitingCountSpan.textContent = 0;
+        if(waitingCountSpan) waitingCountSpan.textContent = 0;
         return;
     }
 
     const waitingArray = Object.entries(waitingPlayersObject)
         .map(([id, data]) => ({ id, ...data }))
-        .sort((a, b) => a.timestamp - b.timestamp); // Já ordenado pelo Firebase, mas re-sort para garantir
+        .sort((a, b) => a.timestamp - b.timestamp);
 
     waitingArray.forEach((player, index) => {
-        waitingListElement.appendChild(renderPlayerListItem(player, index, 'waiting'));
+        if(waitingListElement) waitingListElement.appendChild(renderPlayerListItem(player, index, 'waiting'));
     });
-    waitingCountSpan.textContent = waitingArray.length;
+    if(waitingCountSpan) waitingCountSpan.textContent = waitingArray.length;
 }
-
 
 function clearListsUI() {
-    confirmedGoalkeepersListElement.innerHTML = '';
-    confirmedFieldPlayersListElement.innerHTML = '';
-    waitingListElement.innerHTML = '';
-    confirmedGkCountSpan.textContent = '0';
-    confirmedFpCountSpan.textContent = '0';
-    waitingCountSpan.textContent = '0';
+    if(confirmedGoalkeepersListElement) confirmedGoalkeepersListElement.innerHTML = '';
+    if(confirmedFieldPlayersListElement) confirmedFieldPlayersListElement.innerHTML = '';
+    if(waitingListElement) waitingListElement.innerHTML = '';
+    if(confirmedGkCountSpan) confirmedGkCountSpan.textContent = '0';
+    if(confirmedFpCountSpan) confirmedFpCountSpan.textContent = '0';
+    if(waitingCountSpan) waitingCountSpan.textContent = '0';
 }
 
-// --- Listeners do Firebase para Atualizações em Tempo Real ---
+// --- Funções para o Painel do Admin ---
+function renderAdminUserListItemForPanel(user, isConfirmed, isInWaitingList) { // Nome diferenciado
+    const li = document.createElement('li');
+    li.classList.add('admin-user-item');
+
+    const userInfoDiv = document.createElement('div');
+    userInfoDiv.classList.add('admin-user-info');
+    userInfoDiv.innerHTML = `<strong>${user.name}</strong> <small>(UID: ${user.id})</small>`;
+
+    if (isConfirmed) {
+        const badge = document.createElement('span');
+        badge.className = 'status-badge confirmed-badge';
+        badge.textContent = 'Confirmado';
+        userInfoDiv.appendChild(badge);
+    } else if (isInWaitingList) {
+        const badge = document.createElement('span');
+        badge.className = 'status-badge waiting-badge';
+        badge.textContent = 'Na Espera';
+        userInfoDiv.appendChild(badge);
+    }
+    li.appendChild(userInfoDiv);
+
+    const actionsDiv = document.createElement('div');
+    actionsDiv.classList.add('admin-user-item-actions');
+
+    if (!isConfirmed && !isInWaitingList) {
+        const gkLabel = document.createElement('label');
+        gkLabel.textContent = 'Goleiro? ';
+        gkLabel.style.marginRight = '5px';
+        gkLabel.style.fontSize = '0.9em';
+
+        const isGoalkeeperCheckboxForAdmin = document.createElement('input'); // Nome de var diferente
+        isGoalkeeperCheckboxForAdmin.type = 'checkbox';
+        isGoalkeeperCheckboxForAdmin.id = `admin-add-gk-${user.id}`;
+        isGoalkeeperCheckboxForAdmin.classList.add('admin-add-gk-checkbox');
+        isGoalkeeperCheckboxForAdmin.style.verticalAlign = 'middle';
+        
+        gkLabel.htmlFor = isGoalkeeperCheckboxForAdmin.id;
+
+        const addButton = document.createElement('button');
+        addButton.textContent = 'Adicionar ao Jogo';
+        addButton.classList.add('admin-add-button');
+        addButton.onclick = () => adminAddPlayerToGame(user.id, user.name, isGoalkeeperCheckboxForAdmin.checked);
+
+        actionsDiv.appendChild(gkLabel);
+        actionsDiv.appendChild(isGoalkeeperCheckboxForAdmin);
+        actionsDiv.appendChild(addButton);
+    } else {
+        const statusMsg = document.createElement('span');
+        statusMsg.textContent = isConfirmed ? 'Já está Confirmado.' : 'Já está na Espera.';
+        statusMsg.style.fontSize = '0.9em';
+        statusMsg.style.fontStyle = 'italic';
+        actionsDiv.appendChild(statusMsg);
+    }
+    li.appendChild(actionsDiv);
+    return li;
+}
+
+async function adminAddPlayerToGame(playerId, playerName, isPlayerGoalkeeper) {
+    if (!isCurrentUserAdmin) {
+        displayErrorMessage("Ação restrita a administradores.");
+        return;
+    }
+    displayErrorMessage(`Adicionando ${playerName}...`);
+
+    try {
+        const confirmedSnapshot = await confirmedPlayersRef.once('value');
+        const confirmedData = confirmedSnapshot.val() || {};
+        const waitingSnapshot = await waitingListRef.once('value');
+        const waitingData = waitingSnapshot.val() || {};
+
+        if (confirmedData[playerId] || waitingData[playerId]) {
+            displayErrorMessage(`${playerName} já está em uma das listas.`);
+            return;
+        }
+
+        const playerData = {
+            name: playerName,
+            isGoalkeeper: isPlayerGoalkeeper,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        const confirmedArray = Object.values(confirmedData);
+        const numGkConfirmed = confirmedArray.filter(p => p.isGoalkeeper).length;
+        const numFpConfirmed = confirmedArray.filter(p => !p.isGoalkeeper).length;
+
+        if (isPlayerGoalkeeper) {
+            if (numGkConfirmed < MAX_GOALKEEPERS) {
+                await confirmedPlayersRef.child(playerId).set(playerData);
+                displayErrorMessage(`${playerName} (G) adicionado aos Confirmados.`);
+            } else {
+                await waitingListRef.child(playerId).set(playerData);
+                displayErrorMessage(`Limite de Goleiros atingido. ${playerName} (G) adicionado à Espera.`);
+            }
+        } else {
+            if (numFpConfirmed < MAX_FIELD_PLAYERS) {
+                await confirmedPlayersRef.child(playerId).set(playerData);
+                displayErrorMessage(`${playerName} adicionado aos Confirmados.`);
+            } else {
+                await waitingListRef.child(playerId).set(playerData);
+                displayErrorMessage(`Limite de Jogadores de Linha atingido. ${playerName} adicionado à Espera.`);
+            }
+        }
+    } catch (error) {
+        console.error("Erro do Admin ao adicionar jogador:", error);
+        displayErrorMessage("Falha ao adicionar jogador. Verifique o console.");
+    }
+}
+
+function filterAndRenderAdminUserList(searchTerm = "") {
+    if (!adminAllUsersListElement) return;
+    adminAllUsersListElement.innerHTML = '';
+
+    const lowerSearchTerm = searchTerm.toLowerCase();
+    const filteredUsers = allUsersDataForAdminCache.filter(user =>
+        user.name.toLowerCase().includes(lowerSearchTerm) || user.id.toLowerCase().includes(lowerSearchTerm)
+    );
+    
+    Promise.all([
+        confirmedPlayersRef.once('value'),
+        waitingListRef.once('value')
+    ]).then(([confirmedSnapshot, waitingSnapshot]) => {
+        const confirmedPlayers = confirmedSnapshot.val() || {};
+        const waitingPlayers = waitingSnapshot.val() || {};
+
+        if (filteredUsers.length > 0) {
+            filteredUsers.forEach(user => {
+                const isConfirmed = !!confirmedPlayers[user.id];
+                const isInWaitingList = !!waitingPlayers[user.id];
+                adminAllUsersListElement.appendChild(renderAdminUserListItemForPanel(user, isConfirmed, isInWaitingList));
+            });
+        } else {
+            adminAllUsersListElement.innerHTML = `<li>Nenhum usuário encontrado ${searchTerm ? 'com o termo "' + searchTerm + '"' : 'ou nenhum login registrado'}.</li>`;
+        }
+    }).catch(error => {
+        console.error("Erro ao buscar status dos jogadores (confirmados/espera):", error);
+        adminAllUsersListElement.innerHTML = '<li>Erro ao verificar status dos jogadores nas listas.</li>';
+    });
+}
+
+function loadAndRenderAllUsersListForAdmin() {
+    if (!isCurrentUserAdmin || !adminAllUsersListElement) {
+        if (adminAllUsersListElement) adminAllUsersListElement.innerHTML = '';
+        allUsersDataForAdminCache = [];
+        return;
+    }
+
+    const allUsersLoginsRef = database.ref('allUsersLogins');
+    allUsersLoginsRef.orderByChild('lastLogin').on('value', snapshot => {
+        const usersData = snapshot.val();
+        if (usersData) {
+            allUsersDataForAdminCache = Object.entries(usersData)
+                .map(([id, data]) => ({ id, ...data }))
+                .sort((a, b) => b.lastLogin - a.lastLogin); // Mais recentes primeiro
+            filterAndRenderAdminUserList(adminSearchUserInput ? adminSearchUserInput.value : "");
+        } else {
+            allUsersDataForAdminCache = [];
+            if(adminAllUsersListElement) adminAllUsersListElement.innerHTML = '<li>Nenhum login de usuário registrado ainda.</li>';
+        }
+    }, error => {
+        console.error("Erro ao carregar lista de usuários para admin:", error);
+        if(adminAllUsersListElement) adminAllUsersListElement.innerHTML = '<li>Erro ao carregar lista de usuários.</li>';
+        allUsersDataForAdminCache = [];
+    });
+}
+
+// --- Listeners do Firebase para Atualizações em Tempo Real (Listas de Jogo) ---
 function loadLists() {
     if (confirmedPlayersRef) {
         confirmedPlayersRef.on('value', snapshot => {
             const players = snapshot.val();
             renderConfirmedLists(players);
-            // A chamada para checkWaitingListAndPromote é crucial após uma remoção,
-            // e também quando a lista de espera é atualizada.
         }, error => {
-            console.error("Erro ao carregar listas de confirmados:", error);
-            displayErrorMessage("Não foi possível carregar as listas de confirmados.");
+            console.error("Erro ao carregar lista de confirmados:", error);
+            displayErrorMessage("Não foi possível carregar a lista de confirmados.");
         });
     }
 
@@ -465,7 +550,7 @@ function loadLists() {
         waitingListRef.on('value', snapshot => {
             const players = snapshot.val();
             renderWaitingList(players);
-            checkWaitingListAndPromote(); // Tenta promover sempre que a lista de espera ou principal mudar
+            checkWaitingListAndPromote(); // Tenta promover sempre que lista de espera ou principal mudar
         }, error => {
             console.error("Erro ao carregar lista de espera:", error);
             displayErrorMessage("Não foi possível carregar a lista de espera.");
@@ -473,7 +558,16 @@ function loadLists() {
     }
 }
 
-// Inicializa a carga das listas se o usuário já estiver logado
-if (auth.currentUser) {
-    loadLists();
+// Adiciona listener para o campo de busca de admin (se existir)
+if (adminSearchUserInput) {
+    adminSearchUserInput.addEventListener('input', (e) => {
+        if (isCurrentUserAdmin) {
+            filterAndRenderAdminUserList(e.target.value);
+        }
+    });
 }
+
+// Inicializa a carga das listas se o usuário já estiver logado (movido para dentro do onAuthStateChanged)
+// if (auth.currentUser) {
+//    // A lógica de inicialização agora está dentro de onAuthStateChanged
+// }
