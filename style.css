@@ -392,8 +392,11 @@ button:hover {
     margin-top: 20px;
     font-weight: bold;
     padding: 10px;
-    background-color: #fdd;
+    background-color: #fdd; /* Rosa/vermelho claro para erros */
+    border: 1px solid #fbc; /* Borda sutil para complementar */
     border-radius: 4px;
+    display: none; /* INICIALMENTE ESCONDIDO */
+    transition: opacity 0.3s ease-in-out; /* Opcional: para uma futura transição suave */
 }
 
 
