@@ -168,9 +168,15 @@ if (maxFieldplayersDisplaySpan) maxFieldplayersDisplaySpan.textContent = MAX_FIE
 function displayErrorMessage(message) {
     if (errorMessageElement) {
         errorMessageElement.textContent = message;
+        errorMessageElement.style.display = 'block'; // MOSTRA o elemento
+
+        // Limpa a mensagem e esconde o elemento após 5 segundos
         setTimeout(() => {
-            if (errorMessageElement) errorMessageElement.textContent = '';
-        }, 5000);
+            if (errorMessageElement) {
+                errorMessageElement.textContent = '';
+                errorMessageElement.style.display = 'none'; // ESCONDE o elemento novamente
+            }
+        }, 5000); // Tempo em milissegundos (5 segundos)
     }
 }
 
