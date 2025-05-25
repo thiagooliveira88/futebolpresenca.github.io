@@ -49,6 +49,7 @@
             </div>
 
             <p id="error-message" class="error-message"></p>
+
             <div class="list-section">
                 <h2>Goleiros Confirmados (<span id="confirmed-gk-count">0</span>/<span id="max-goalkeepers-display">4</span>)</h2>
                 <ul id="confirmed-goalkeepers-list">
@@ -64,6 +65,18 @@
             <div class="list-section">
                 <h2>Lista de Espera (<span id="waiting-count">0</span>)</h2>
                 <ul id="waiting-list">
+                    </ul>
+            </div>
+        </div>
+        </div> <div id="admin-section" class="admin-panel" style="display:none;">
+            <h2>Painel do Administrador</h2>
+            <div class="list-section">
+                <h3>Usuários Registrados (Visível para Admins)</h3>
+                <p><small>Lista de usuários que já fizeram login. Use para adicionar jogadores às listas de futebol, se necessário.</small></p>
+                <div class="admin-user-actions">
+                    <input type="text" id="admin-search-user" placeholder="Buscar usuário por nome ou UID...">
+                </div>
+                <ul id="admin-all-users-list">
                     </ul>
             </div>
         </div>
