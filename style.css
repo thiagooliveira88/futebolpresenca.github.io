@@ -218,113 +218,169 @@ button:hover {
     }
 }
 
-/* Estilos para o Painel do Administrador */
-.admin-panel {
-    margin-top: 30px;
-    padding: 15px;
-    background-color: #fdf5e6; /* Cor de fundo suave, como "OldLace" */
-    border: 1px solid #f5deb3; /* Cor de borda "Wheat" */
+.tabs-container {
+    margin-top: 20px;
+    border: 1px solid #ddd;
     border-radius: 8px;
-}
-
-.admin-panel h2 {
-    text-align: center;
-    color: #8b4513; /* "SaddleBrown" */
-    margin-bottom: 15px;
-}
-
-.admin-panel h3 {
-    color: #a0522d; /* "Sienna" */
-    border-bottom: 1px solid #d2b48c; /* "Tan" */
-    padding-bottom: 5px;
-}
-.admin-panel p small {
-    font-size: 0.85em;
-    color: #666;
-    display: block;
-    margin-bottom: 10px;
-}
-
-#admin-search-user {
-    width: 100%;
-    padding: 8px 10px;
-    margin-bottom: 10px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    box-sizing: border-box;
-}
-
-#admin-all-users-list {
-    list-style-type: none;
-    padding: 0;
-    max-height: 300px; /* Limita a altura e adiciona scroll */
-    overflow-y: auto;
-    border: 1px solid #e0e0e0;
-    border-radius: 4px;
+    overflow: hidden; /* Para conter os cantos arredondados dos botões/conteúdo */
     background-color: #fff;
 }
 
-.admin-user-item {
-    padding: 8px 12px;
-    border-bottom: 1px solid #f0f0f0;
+.tab-buttons {
+    display: flex;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #ddd;
+}
+
+.tab-button {
+    padding: 12px 20px;
+    cursor: pointer;
+    border: none;
+    background-color: transparent;
+    font-size: 1em;
+    color: #495057;
+    border-right: 1px solid #ddd; /* Linha separadora entre botões */
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+.tab-button:last-child {
+    border-right: none;
+}
+
+.tab-button:hover {
+    background-color: #e9ecef;
+}
+
+.tab-button.active {
+    background-color: #fff;
+    color: #007bff; /* Azul para aba ativa */
+    border-bottom: 2px solid #007bff; /* Indicador visual da aba ativa */
+    font-weight: bold;
+    position: relative;
+    top: 1px; /* Alinha com a borda inferior do container */
+}
+
+.tab-content {
+    display: none; /* Esconde todas as abas por padrão */
+    padding: 20px;
+    border-top: none; /* A borda já está no .tab-buttons */
+}
+
+.tab-content.active {
+    display: block; /* Mostra apenas a aba ativa */
+}
+
+/* --- Estilos Melhorados para o Conteúdo do Painel do Admin (dentro da aba) --- */
+.admin-panel-content { /* Novo wrapper para estilização */
+    /* background-color: #fdf5e6;  Removido, pois a aba já tem fundo branco */
+    /* padding: 20px;             O padding já está no .tab-content */
+    border-radius: 6px;
+}
+
+.admin-panel-content h3 {
+    color: #333; /* Cor mais escura para o título */
+    /* border-bottom: 1px solid #ccc; Removido, pode ser desnecessário com as abas */
+    padding-bottom: 8px;
+    margin-top: 0; /* Remove margem superior do h3 */
+    margin-bottom: 15px;
+    font-size: 1.4em;
+}
+.admin-panel-content p small {
+    font-size: 0.9em;
+    color: #555;
+    display: block;
+    margin-bottom: 15px;
+}
+
+#admin-search-user { /* Já estilizado anteriormente, pode manter ou ajustar */
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 15px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    box-sizing: border-box;
+    font-size: 1em;
+}
+
+#admin-all-users-list { /* Já estilizado, pode manter ou ajustar */
+    list-style-type: none;
+    padding: 0;
+    max-height: 350px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    /* background-color: #fff; Removido, pois .tab-content já é branco */
+}
+
+.admin-user-item { /* Já estilizado, pode manter ou ajustar */
+    padding: 10px 15px;
+    border-bottom: 1px solid #e9ecef;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 10px; /* Espaço entre os elementos filhos */
+    gap: 15px;
 }
 .admin-user-item:last-child {
     border-bottom: none;
 }
 
-.admin-user-info {
-    flex-grow: 1; /* Permite que esta parte ocupe o espaço disponível */
+.admin-user-info { /* Já estilizado, pode manter ou ajustar */
+    flex-grow: 1;
 }
 .admin-user-info strong {
-    color: #333;
+    color: #212529;
 }
 .admin-user-info small {
-    color: #777;
-    font-size: 0.8em;
-    margin-left: 5px;
+    color: #6c757d;
+    font-size: 0.85em;
+    margin-left: 6px;
 }
 
-.status-badge {
-    font-size: 0.75em;
-    padding: 2px 6px;
-    border-radius: 3px;
+.status-badge { /* Já estilizado, pode manter ou ajustar */
+    font-size: 0.8em;
+    padding: 3px 7px;
+    border-radius: 4px; /* Um pouco mais arredondado */
     color: white;
-    margin-left: 8px;
+    margin-left: 10px;
     font-weight: bold;
     vertical-align: middle;
 }
-.confirmed-badge {
-    background-color: #5cb85c; /* Verde */
-}
-.waiting-badge {
-    background-color: #f0ad4e; /* Laranja */
-}
+/* Cores dos badges permanecem as mesmas */
 
-.admin-user-item-actions {
+.admin-user-item-actions { /* Já estilizado, pode manter ou ajustar */
     display: flex;
     align-items: center;
-    white-space: nowrap; /* Evita quebra de linha nos botões/checkbox */
+    white-space: nowrap;
 }
-
 .admin-user-item-actions .admin-add-gk-checkbox {
-    margin-left: 10px;
-    margin-right: 3px;
+    margin-left: 10px; /* Espaço antes do checkbox se houver outros botões */
+    margin-right: 4px;
+    transform: scale(1.1); /* Checkbox um pouco maior */
 }
-
-.admin-user-item-actions .admin-add-button {
-    background-color: #007bff; /* Azul */
+.admin-user-item-actions .admin-add-button { /* Já estilizado, pode manter ou ajustar */
+    background-color: #28a745; /* Verde mais vibrante */
     color: white;
     border: none;
-    padding: 5px 10px;
+    padding: 6px 12px;
     border-radius: 4px;
     cursor: pointer;
     font-size: 0.9em;
     margin-left: 10px;
 }
 .admin-user-item-actions .admin-add-button:hover {
-    background-color: #0056b3;
+    background-color: #218838;
+}
+.admin-user-item-actions label { /* Para o "Goleiro?" */
+    font-size: 0.9em;
+    color: #495057;
+}
+
+/* Estilos para o .controls e .list-section dentro da aba (se necessário) */
+.tab-content .controls {
+    margin-bottom: 20px; /* Garante espaçamento */
+}
+.tab-content .list-section {
+    margin-bottom: 25px; /* Garante espaçamento entre seções de lista */
+}
+.tab-content .list-section:last-child {
+    margin-bottom: 0;
 }
