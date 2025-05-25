@@ -1,5 +1,5 @@
 // Cole aqui o objeto de configuração do Firebase que você copiou do console
- const firebaseConfig = {
+const firebaseConfig = {
     apiKey: "AIzaSyAUEJ-tqQ26B4m7-9CG8C8frevBpZvsvLI",
     authDomain: "futebolpresenca.firebaseapp.com",
     databaseURL: "https://futebolpresenca-default-rtdb.firebaseio.com",
