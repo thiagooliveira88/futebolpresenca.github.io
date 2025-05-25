@@ -1,9 +1,9 @@
 // Cole aqui o objeto de configuração do Firebase que você copiou do console
 const firebaseConfig = {
-    apiKey: "SUA_API_KEY",
-    authDomain: "SEU_AUTH_DOMAIN",
-    databaseURL: "SEU_DATABASE_URL", // Importante: Verifique se é o URL do Realtime Database
-    projectId: "SEU_PROJECT_ID",
+    apiKey: "AIzaSyAUEJ-tqQ26B4m7-9CG8C8frevBpZvsvLI",
+    authDomain: "futebolpresenca.firebaseapp.com",
+    databaseURL: "https://futebolpresenca-default-rtdb.firebaseio.com", // Importante: Verifique se é o URL do Realtime Database
+    projectId: "futebolpresenca",
     storageBucket: "SEU_STORAGE_BUCKET",
     messagingSenderId: "SEU_MESSAGING_SENDER_ID",
     appId: "SEU_APP_ID"
