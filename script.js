@@ -10,6 +10,8 @@ const firebaseConfig = {
     measurementId: "G-LJBYMWJM9C"
   };
 
+  let isCurrentUserAdmin = false;
+
 // Inicializar Firebase
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
@@ -42,7 +44,6 @@ const errorMessageElement = document.getElementById('error-message');
 // --- Estado do Usuário ---
 let currentUser = null;
 
-// --- Lógica de Autenticação (sem alterações) ---
 auth.onAuthStateChanged(user => {
     currentUser = user;
     if (user) {
@@ -50,8 +51,26 @@ auth.onAuthStateChanged(user => {
         loginButton.style.display = 'none';
         logoutButton.style.display = 'inline-block';
         mainContent.style.display = 'block';
-        loadLists();
+
+        // Verificar status de admin
+        const adminStatusRef = database.ref(`admins/${user.uid}`);
+        adminStatusRef.once('value').then(snapshot => {
+            isCurrentUserAdmin = snapshot.exists() && snapshot.val() === true;
+            console.log("Status de Admin:", isCurrentUserAdmin);
+            // Se as listas já estiverem carregadas, pode ser necessário forçar uma re-renderização
+            // para que os botões de remover apareçam/desapareçam corretamente.
+            // Por simplicidade, a renderização já ocorre com base nos dados do Firebase,
+            // e a lógica do botão de remoção agora usará isCurrentUserAdmin.
+            // Vamos garantir que as funções de renderização sejam chamadas para atualizar a UI.
+            loadLists(); // Chamar loadLists para garantir que a UI reflete o status de admin
+        }).catch(error => {
+            console.error("Erro ao verificar status de admin:", error);
+            isCurrentUserAdmin = false; // Garante que não é admin em caso de erro
+            loadLists();
+        });
+
     } else {
+        isCurrentUserAdmin = false; // Reseta o status de admin no logout
         userInfo.textContent = 'Por favor, faça login para participar.';
         loginButton.style.display = 'inline-block';
         logoutButton.style.display = 'none';
@@ -239,16 +258,93 @@ async function checkWaitingListAndPromote() {
 
 // --- Funções de Renderização da UI (GRANDES MUDANÇAS AQUI) ---
 
+// function renderPlayerListItem(player, index, listTypeIdentifier) {
+//     const li = document.createElement('li');
+    
+//     const orderSpan = document.createElement('span');
+//     orderSpan.classList.add('player-order');
+//     orderSpan.textContent = `${index + 1}. `; // Numeração
+//     li.appendChild(orderSpan);
+
+//     const nameSpan = document.createElement('span');
+//     nameSpan.classList.add('player-name');
+//     nameSpan.textContent = player.name;
+//     li.appendChild(nameSpan);
+
+//     if (player.isGoalkeeper) {
+//         const gkIndicator = document.createElement('span');
+//         gkIndicator.classList.add('player-info');
+//         gkIndicator.textContent = ' (Goleiro)';
+//         // Só adiciona o indicador se não for a lista específica de goleiros já
+//         if (listTypeIdentifier !== 'confirmed-gk' && listTypeIdentifier !== 'waiting-gk-explicit') {
+//              li.appendChild(gkIndicator); // Adiciona (Goleiro) na lista de espera geral
+//         }
+//     }
+
+//     // Adiciona botão de remover se o usuário logado for o jogador
+//     if (currentUser && currentUser.uid === player.id) {
+//         const removeBtn = document.createElement('button');
+//         removeBtn.classList.add('remove-button');
+//         removeBtn.textContent = 'Sair';
+//         // Determina de qual lista remover (confirmados ou espera)
+//         const listTypeForRemove = listTypeIdentifier.startsWith('confirmed') ? 'confirmed' : 'waiting';
+//         removeBtn.onclick = () => removePlayer(player.id, listTypeForRemove);
+//         li.appendChild(removeBtn);
+//     }
+//     return li;
+// }
+
+// function renderPlayerListItem(player, index, listTypeIdentifier) {
+//     const li = document.createElement('li');
+
+//     // Criar um contêiner para as informações textuais do jogador
+//     const playerTextInfo = document.createElement('div');
+//     playerTextInfo.classList.add('player-text-info');
+
+//     const orderSpan = document.createElement('span');
+//     orderSpan.classList.add('player-order');
+//     orderSpan.textContent = `${index + 1}. `; // Numeração
+//     playerTextInfo.appendChild(orderSpan);
+
+//     const nameSpan = document.createElement('span');
+//     nameSpan.classList.add('player-name');
+//     nameSpan.textContent = player.name;
+//     playerTextInfo.appendChild(nameSpan);
+
+//     if (player.isGoalkeeper) {
+//         const gkIndicator = document.createElement('span');
+//         gkIndicator.classList.add('player-info'); // Classe existente para indicação (Goleiro)
+//         gkIndicator.textContent = ' (Goleiro)';
+//         // Adiciona o indicador (Goleiro) apenas se não for a lista específica de goleiros
+//         // e na lista de espera.
+//         if (listTypeIdentifier === 'confirmed-fp' || listTypeIdentifier === 'waiting') {
+//              playerTextInfo.appendChild(gkIndicator);
+//         }
+//     }
+
+//     li.appendChild(playerTextInfo); // Adiciona o grupo de texto ao <li>
+
+//     // Adiciona botão de remover se o usuário logado for o jogador
+//     if (currentUser && currentUser.uid === player.id) {
+//         const removeBtn = document.createElement('button');
+//         removeBtn.classList.add('remove-button');
+//         removeBtn.textContent = 'Sair';
+//         const listTypeForRemove = listTypeIdentifier.startsWith('confirmed') ? 'confirmed' : 'waiting';
+//         removeBtn.onclick = () => removePlayer(player.id, listTypeForRemove);
+//         li.appendChild(removeBtn); // Adiciona o botão diretamente ao <li>, após o grupo de texto
+//     }
+//     return li;
+// }
+
 function renderPlayerListItem(player, index, listTypeIdentifier) {
     const li = document.createElement('li');
 
-    // Criar um contêiner para as informações textuais do jogador
     const playerTextInfo = document.createElement('div');
     playerTextInfo.classList.add('player-text-info');
 
     const orderSpan = document.createElement('span');
     orderSpan.classList.add('player-order');
-    orderSpan.textContent = `${index + 1}. `; // Numeração
+    orderSpan.textContent = `${index + 1}. `;
     playerTextInfo.appendChild(orderSpan);
 
     const nameSpan = document.createElement('span');
@@ -258,25 +354,32 @@ function renderPlayerListItem(player, index, listTypeIdentifier) {
 
     if (player.isGoalkeeper) {
         const gkIndicator = document.createElement('span');
-        gkIndicator.classList.add('player-info'); // Classe existente para indicação (Goleiro)
+        gkIndicator.classList.add('player-info');
         gkIndicator.textContent = ' (Goleiro)';
-        // Adiciona o indicador (Goleiro) apenas se não for a lista específica de goleiros
-        // e na lista de espera.
         if (listTypeIdentifier === 'confirmed-fp' || listTypeIdentifier === 'waiting') {
              playerTextInfo.appendChild(gkIndicator);
         }
     }
+    li.appendChild(playerTextInfo);
 
-    li.appendChild(playerTextInfo); // Adiciona o grupo de texto ao <li>
-
-    // Adiciona botão de remover se o usuário logado for o jogador
-    if (currentUser && currentUser.uid === player.id) {
+    // Adiciona botão de remover SE:
+    // 1. O usuário logado é o próprio jogador OU
+    // 2. O usuário logado é um administrador
+    if (currentUser && (currentUser.uid === player.id || isCurrentUserAdmin)) {
         const removeBtn = document.createElement('button');
         removeBtn.classList.add('remove-button');
-        removeBtn.textContent = 'Sair';
+        removeBtn.textContent = 'Sair'; // Para o próprio usuário
+        if (isCurrentUserAdmin && currentUser.uid !== player.id) {
+            removeBtn.textContent = 'Remover'; // Para admin removendo outro
+            removeBtn.style.backgroundColor = '#f39c12'; // Cor diferente para admin remover
+        } else if (isCurrentUserAdmin && currentUser.uid === player.id) {
+             removeBtn.textContent = 'Sair (Admin)'; // Admin saindo da própria vaga
+        }
+
+
         const listTypeForRemove = listTypeIdentifier.startsWith('confirmed') ? 'confirmed' : 'waiting';
         removeBtn.onclick = () => removePlayer(player.id, listTypeForRemove);
-        li.appendChild(removeBtn); // Adiciona o botão diretamente ao <li>, após o grupo de texto
+        li.appendChild(removeBtn);
     }
     return li;
 }
