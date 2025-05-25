@@ -125,3 +125,95 @@ button:hover {
     margin-top: 15px;
     font-weight: bold;
 }
+
+
+/* Estilos para o Novo Cabeçalho de Informações do Jogo */
+.game-info-header {
+    background-color: #e9f5ff; /* Um azul claro suave */
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 25px;
+    border: 1px solid #bee0f7; /* Borda sutil */
+}
+
+.game-info-header h1 {
+    font-size: 1.8em; /* Ajuste o tamanho conforme necessário */
+    color: #1a5ca3; /* Um azul mais escuro para o título principal */
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.game-info-header h3 {
+    font-size: 1.1em;
+    color: #2c3e50;
+    margin-top: 0;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #bdc3c7;
+    padding-bottom: 5px;
+}
+
+.game-details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); /* Responsivo */
+    gap: 20px; /* Espaço entre as colunas */
+    margin-bottom: 20px;
+}
+
+.info-section {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.info-section p {
+    margin: 8px 0;
+    font-size: 0.95em;
+    line-height: 1.6;
+}
+
+.info-section .label {
+    font-weight: bold;
+    color: #34495e;
+}
+
+.warning-text {
+    color: #c0392b; /* Vermelho para alerta */
+    font-weight: bold;
+}
+
+.warning-text .label {
+    color: #c0392b; /* Mantém a cor do label consistente com o texto de aviso */
+}
+
+.payment-info a, .external-links a {
+    color: #2980b9;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.payment-info a:hover, .external-links a:hover {
+    text-decoration: underline;
+    color: #1f638b;
+}
+
+.external-links {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px dashed #ccc;
+}
+
+.external-links p {
+    margin: 8px 0;
+    text-align: center; /* Centraliza os links úteis */
+}
+
+/* Ajustes para telas menores se necessário */
+@media (max-width: 600px) {
+    .game-info-header h1 {
+        font-size: 1.5em;
+    }
+    .game-details-grid {
+        grid-template-columns: 1fr; /* Empilha as seções em telas pequenas */
+    }
+}
