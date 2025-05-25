@@ -17,8 +17,8 @@ const auth = firebase.auth();
 const database = firebase.database();
 
 // --- Constantes de Configuração da Lista ---
-const MAX_PLAYERS = 20; // Ou 24 se tiver 4 goleiros
-const MAX_GOALKEEPERS = 2; // Altere para 4 se MAX_PLAYERS for 24
+const MAX_PLAYERS = 24; // Ou 24 se tiver 4 goleiros
+const MAX_GOALKEEPERS = 4; // Altere para 4 se MAX_PLAYERS for 24
 
 // --- Referências do DOM ---
 const loginButton = document.getElementById('login-button');
