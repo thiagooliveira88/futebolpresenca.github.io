@@ -1,13 +1,15 @@
 // Cole aqui o objeto de configuração do Firebase que você copiou do console
-const firebaseConfig = {
+ const firebaseConfig = {
     apiKey: "AIzaSyAUEJ-tqQ26B4m7-9CG8C8frevBpZvsvLI",
     authDomain: "futebolpresenca.firebaseapp.com",
-    databaseURL: "https://futebolpresenca-default-rtdb.firebaseio.com", // Importante: Verifique se é o URL do Realtime Database
+    databaseURL: "https://futebolpresenca-default-rtdb.firebaseio.com",
     projectId: "futebolpresenca",
-    storageBucket: "SEU_STORAGE_BUCKET",
-    messagingSenderId: "SEU_MESSAGING_SENDER_ID",
-    appId: "SEU_APP_ID"
-};
+    storageBucket: "futebolpresenca.firebasestorage.app",
+    messagingSenderId: "410645587358",
+    appId: "1:410645587358:web:5777a493ef77112f16228f",
+    measurementId: "G-LJBYMWJM9C"
+  };
+
 
 // Inicializar Firebase
 firebase.initializeApp(firebaseConfig);
