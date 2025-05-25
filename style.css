@@ -217,3 +217,114 @@ button:hover {
         grid-template-columns: 1fr; /* Empilha as seções em telas pequenas */
     }
 }
+
+/* Estilos para o Painel do Administrador */
+.admin-panel {
+    margin-top: 30px;
+    padding: 15px;
+    background-color: #fdf5e6; /* Cor de fundo suave, como "OldLace" */
+    border: 1px solid #f5deb3; /* Cor de borda "Wheat" */
+    border-radius: 8px;
+}
+
+.admin-panel h2 {
+    text-align: center;
+    color: #8b4513; /* "SaddleBrown" */
+    margin-bottom: 15px;
+}
+
+.admin-panel h3 {
+    color: #a0522d; /* "Sienna" */
+    border-bottom: 1px solid #d2b48c; /* "Tan" */
+    padding-bottom: 5px;
+}
+.admin-panel p small {
+    font-size: 0.85em;
+    color: #666;
+    display: block;
+    margin-bottom: 10px;
+}
+
+#admin-search-user {
+    width: 100%;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+#admin-all-users-list {
+    list-style-type: none;
+    padding: 0;
+    max-height: 300px; /* Limita a altura e adiciona scroll */
+    overflow-y: auto;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    background-color: #fff;
+}
+
+.admin-user-item {
+    padding: 8px 12px;
+    border-bottom: 1px solid #f0f0f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px; /* Espaço entre os elementos filhos */
+}
+.admin-user-item:last-child {
+    border-bottom: none;
+}
+
+.admin-user-info {
+    flex-grow: 1; /* Permite que esta parte ocupe o espaço disponível */
+}
+.admin-user-info strong {
+    color: #333;
+}
+.admin-user-info small {
+    color: #777;
+    font-size: 0.8em;
+    margin-left: 5px;
+}
+
+.status-badge {
+    font-size: 0.75em;
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: white;
+    margin-left: 8px;
+    font-weight: bold;
+    vertical-align: middle;
+}
+.confirmed-badge {
+    background-color: #5cb85c; /* Verde */
+}
+.waiting-badge {
+    background-color: #f0ad4e; /* Laranja */
+}
+
+.admin-user-item-actions {
+    display: flex;
+    align-items: center;
+    white-space: nowrap; /* Evita quebra de linha nos botões/checkbox */
+}
+
+.admin-user-item-actions .admin-add-gk-checkbox {
+    margin-left: 10px;
+    margin-right: 3px;
+}
+
+.admin-user-item-actions .admin-add-button {
+    background-color: #007bff; /* Azul */
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    margin-left: 10px;
+}
+.admin-user-item-actions .admin-add-button:hover {
+    background-color: #0056b3;
+}
